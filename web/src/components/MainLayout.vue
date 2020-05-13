@@ -1,8 +1,8 @@
 <template>
   <div>
-    <b-container id="main-container">
+    <b-container fluid id="main-container">
       <b-row>
-        <b-col sm="4">
+        <b-col sm="3">
           <b-card title="OpenFaaS Auto Scaling">
             Gateway
             <b-form-input v-model="gateway"></b-form-input>
@@ -19,17 +19,34 @@
             <b-button v-if="started" v-on:click="stop" href="#" variant="secondary">Stop</b-button>
           </b-card>
         </b-col>
-        <b-col sm="8">
-          <div v-if="info">
-            <b-card title="Charts">
+        <b-col sm="5">
+          <b-card title="Charts">
+            <div v-if="describe">
               <b>Number of Calls</b>
               <my-chart ref="numCalls"></my-chart>
               <b>Replicas</b>
               <my-chart ref="numReplicas"></my-chart>
               <b>Average Response Time (ms)</b>
               <my-chart ref="avg"></my-chart>
-            </b-card>
-          </div>
+            </div>
+          </b-card>
+        </b-col>
+        <b-col sm="4">
+          <b-card title="Pods">
+            <b-row>
+              <b-col sm="5">Name</b-col>
+              <b-col sm="4">Status</b-col>
+              <b-col sm="3">Age</b-col>
+            </b-row>
+            <hr />
+            <div v-if="pods">
+              <b-row v-for="(pod, index) in pods" v-bind:key="index" :style="'color:' + getPodColor(pod)">
+                <b-col sm="5">{{ pod.name }}</b-col>
+                <b-col sm="4">{{ pod.status }}</b-col>
+                <b-col sm="3">{{ pod.age }}</b-col>
+              </b-row>
+            </div>
+          </b-card>
         </b-col>
       </b-row>
     </b-container>
@@ -58,7 +75,8 @@ export default {
       data: "5566",
       cps: 1,
       started: false,
-      info: undefined,
+      describe: undefined,
+      pods: undefined,
       stats: undefined
     };
   },
@@ -82,11 +100,13 @@ export default {
       axios
         .get("http://10.62.58.182:3000/" + this.fn)
         .then(response => {
-          this.info = response.data;
+          this.describe = response.data.describe;
+          this.pods = response.data.pods;
         })
         .catch(e => {
           console.log(e);
-          this.info = undefined;
+          this.describe = undefined;
+          this.pods = undefined;
         });
 
       if (this.stats) {
@@ -103,9 +123,12 @@ export default {
             replicas: 0
           };
 
-          bucket.counter++;
-          bucket.secOffset = bucket.ms += entry.ms;
-          bucket.avg = parseInt(Math.round(bucket.ms / bucket.counter));
+          if (!entry.noCall) {
+            bucket.counter++;
+            bucket.secOffset = bucket.ms += entry.ms;
+            bucket.avg = parseInt(Math.round(bucket.ms / bucket.counter));
+          }
+
           bucket.replicas = Math.max(bucket.replicas, entry.replicas);
 
           if (i == 0) {
@@ -122,7 +145,12 @@ export default {
         let dataNumCalls = [];
         let dataNumReplicas = [];
         let dataAvg = [];
+
+        let now = parseInt(new Date().getTime() / 1000);
+
         Object.keys(buckets).forEach(sec => {
+          if (sec < now - 300) return true;
+
           labels.push(buckets[sec].secOffset);
           dataNumCalls.push(buckets[sec].counter);
           dataNumReplicas.push(buckets[sec].replicas);
@@ -133,6 +161,18 @@ export default {
         this.$refs.avg.reload(labels, dataAvg);
       }
     },
+    getPodColor: function(pod) {
+      switch (pod.status) {
+        case "Running":
+          return "green";
+        case "Pending":
+          return "gray";
+        case "ContainerCreating":
+          return "red";
+        case "Terminating":
+          return "red";
+      }
+    },
     invoke: function() {
       if (!this.started) return;
 
@@ -140,23 +180,32 @@ export default {
         this.invoke();
       }, 1000);
 
-      for (let i = 0; i < this.cps; i++) {
-        let start = new Date().getTime();
-        axios
-          .post(this.gateway + "/function/" + this.fn, this.data)
-          .then(() => {
-            let now = new Date().getTime();
-            let ms = now - start;
+      if (this.cps == 0) {
+        this.stats.push({
+          noCall: true,
+          sec: parseInt(new Date().getTime() / 1000),
+          ms: 0,
+          replicas: this.describe.Replicas
+        });
+      } else {
+        for (let i = 0; i < this.cps; i++) {
+          let start = new Date().getTime();
+          axios
+            .post(this.gateway + "/function/" + this.fn, this.data)
+            .then(() => {
+              let now = new Date().getTime();
+              let ms = now - start;
 
-            this.stats.push({
-              sec: parseInt(now / 1000),
-              ms,
-              replicas: this.info.Replicas
+              this.stats.push({
+                sec: parseInt(now / 1000),
+                ms,
+                replicas: this.describe.Replicas
+              });
+            })
+            .catch(e => {
+              console.log(e);
             });
-          })
-          .catch(e => {
-            console.log(e);
-          });
+        }
       }
     }
   }

@@ -18,20 +18,53 @@ let describe = function (fn) {
   });
 };
 
+let pods = function (fn) {
+  return new Promise((resolve, reject) => {
+    exec("sudo kubectl get pods -n openfaas-fn", (error, stdout, stderr) => {
+      if (error) return reject(error);
+      if (stderr) return reject(stderr);
+
+      let lines = stdout.split("\n");
+      let pods = [];
+      lines.forEach((line) => {
+        if (line.startsWith("NAME")) return true;
+        if (!line.startsWith(fn)) return true;
+        let arr = line.split(/\s+/);
+        if (arr.length < 5) return true;
+
+        pods.push({
+          name: arr[0],
+          status: arr[2],
+          age: arr[4],
+        });
+      });
+
+      return resolve(pods);
+    });
+  });
+};
+
 let express = require("express");
 let app = express();
-app.use(require('cors')());
+app.use(require("cors")());
 
 app.get("/:fn", async function (req, res) {
-  await describe(req.params.fn)
-    .then((response) => {
-      console.log(response);
-      res.send(response);
-    })
-    .catch((e) => {
-      console.log(e);
-      res.status(500).send();
-    });
+  let ret = {};
+
+  try {
+    await Promise.all([
+      describe(req.params.fn).then((response) => {
+        ret.describe = response;
+      }),
+      pods(req.params.fn).then((response) => {
+        ret.pods = response;
+      }),
+    ]);
+
+    res.send(ret);
+  } catch (e) {
+    res.status(500).send();
+  }
 });
 
 app.listen(3000, function () {
