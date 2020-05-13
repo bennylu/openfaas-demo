@@ -1,0 +1,10 @@
+version: "2"
+
+services:
+  web:
+    container_name: openfaas-demo-web
+    image: harbor.nxai.io:8080/openfaas-demo/web:latest
+    ports:
+      - "8080:80"
+    restart: always
+
