@@ -12,7 +12,7 @@
             <b-form-textarea v-model="data" rows="2" max-rows="2"></b-form-textarea>
             <br />
             {{ cps }} calls per second
-            <b-form-input id="range-1" v-model="cps" type="range" min="0" max="30"></b-form-input>
+            <b-form-input id="range-1" v-model="cps" type="range" min="0" max="40"></b-form-input>
             <br />
             <br />
             <b-button v-if="!started" v-on:click="start" href="#" variant="primary">Start</b-button>
@@ -70,7 +70,8 @@ export default {
   },
   data: function() {
     return {
-      gateway: "http://10.62.58.182:31112",
+      //gateway: "http://10.62.58.182:31112",
+      gateway: "http://35.221.238.105:31112",
       fn: "echo",
       data: "5566",
       cps: 1,
@@ -98,7 +99,8 @@ export default {
       }, 2000);
 
       axios
-        .get("http://10.62.58.182:3000/" + this.fn)
+        //.get("http://10.62.58.182:4000/" + this.fn)
+        .get("http://35.221.238.105:4000/" + this.fn)
         .then(response => {
           this.describe = response.data.describe;
           this.pods = response.data.pods;
