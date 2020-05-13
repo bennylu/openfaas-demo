@@ -63,10 +63,11 @@ app.get("/:fn", async function (req, res) {
 
     res.send(ret);
   } catch (e) {
+    console.log(e);
     res.status(500).send();
   }
 });
 
-app.listen(3000, function () {
-  console.log("Example app listening on port 3000!");
+app.listen(4000, function () {
+  console.log("Example app listening on port 4000!");
 });
